@@ -33,6 +33,9 @@ type Config struct {
 	// Forbidden defines the response body for forbidden responses.
 	// Optional. Default: func(c *fiber.Ctx) error { return c.SendStatus(403) }
 	Forbidden fiber.Handler
+
+	// Pass more options to Enforce
+	Others func(*fiber.Ctx) []interface{}
 }
 
 var ConfigDefault = Config{

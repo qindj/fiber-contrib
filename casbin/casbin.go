@@ -74,7 +74,12 @@ func (m *Middleware) RoutePermission() fiber.Handler {
 			return m.config.Unauthorized(c)
 		}
 
-		if ok, err := m.config.Enforcer.Enforce(sub, c.Path(), c.Method()); err != nil {
+		others := []interface{}{sub, c.Path(), c.Method()}
+		if m.config.Others != nil {
+			others = append(others, m.config.Others(c)...)
+		}
+
+		if ok, err := m.config.Enforcer.Enforce(others...); err != nil {
 			return c.SendStatus(fiber.StatusInternalServerError)
 		} else if !ok {
 			return m.config.Forbidden(c)
