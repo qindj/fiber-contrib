@@ -1,4 +1,4 @@
-name: "Test fibersentry"
+name: "Test Fgprof"
 
 on:
   push:
@@ -6,10 +6,10 @@ on:
       - master
       - main
     paths:
-      - 'fibersentry/**'
+      - 'fgprof/**'
   pull_request:
     paths:
-      - 'fibersentry/**'
+      - 'fgprof/**'
 
 jobs:
   Tests:
@@ -17,7 +17,6 @@ jobs:
     strategy:
       matrix:
         go-version:
-          - 1.18.x
           - 1.19.x
           - 1.20.x
           - 1.21.x
@@ -29,5 +28,5 @@ jobs:
         with:
           go-version: '${{ matrix.go-version }}'
       - name: Run Test
-        working-directory: ./fibersentry
+        working-directory: ./fgprof
         run: go test -v -race ./...
