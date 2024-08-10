@@ -447,6 +447,60 @@ func TestCustomAttributes(t *testing.T) {
 	assert.Contains(t, attr, attribute.String("http.query_params", "foo=bar"))
 }
 
+func TestCustomMetricAttributes(t *testing.T) {
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(metric.WithReader(reader))
+
+	serverName := "foobar"
+	port := 8080
+	route := "/foo"
+
+	app := fiber.New()
+	app.Use(
+		otelfiber.Middleware(
+			otelfiber.WithMeterProvider(provider),
+			otelfiber.WithPort(port),
+			otelfiber.WithServerName(serverName),
+			otelfiber.WithCustomMetricAttributes(func(ctx *fiber.Ctx) []attribute.KeyValue {
+				return []attribute.KeyValue{
+					attribute.Key("http.query_params").String(ctx.Request().URI().QueryArgs().String()),
+				}
+			}),
+		),
+	)
+
+	app.Get(route, func(ctx *fiber.Ctx) error {
+		return ctx.SendStatus(http.StatusOK)
+	})
+
+	r := httptest.NewRequest(http.MethodGet, "/foo?foo=bar", nil)
+	resp, _ := app.Test(r)
+
+	// do and verify the request
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	metrics := metricdata.ResourceMetrics{}
+	err := reader.Collect(context.Background(), &metrics)
+	assert.NoError(t, err)
+	assert.Len(t, metrics.ScopeMetrics, 1)
+
+	requestAttrs := []attribute.KeyValue{
+		semconv.HTTPFlavorKey.String(fmt.Sprintf("1.%d", r.ProtoMinor)),
+		semconv.HTTPMethodKey.String(http.MethodGet),
+		semconv.HTTPSchemeHTTP,
+		semconv.NetHostNameKey.String(r.Host),
+		semconv.NetHostPortKey.Int(port),
+		semconv.HTTPServerNameKey.String(serverName),
+		attribute.String("http.query_params", "foo=bar"),
+	}
+	responseAttrs := append(
+		semconv.HTTPAttributesFromHTTPStatusCode(200),
+		semconv.HTTPRouteKey.String(route),
+	)
+
+	assertScopeMetrics(t, metrics.ScopeMetrics[0], route, requestAttrs, append(requestAttrs, responseAttrs...))
+}
+
 func TestOutboundTracingPropagation(t *testing.T) {
 	sr := new(tracetest.SpanRecorder)
 	provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(sr))
@@ -495,4 +549,42 @@ func TestOutboundTracingPropagationWithInboundContext(t *testing.T) {
 	assert.NotEmpty(t, resp.Header.Get("X-B3-SpanId"))
 	assert.Equal(t, traceId, resp.Header.Get("X-B3-TraceId"))
 	assert.Equal(t, "1", resp.Header.Get("X-B3-Sampled"))
+}
+
+func TestCollectClientIP(t *testing.T) {
+	t.Parallel()
+
+	for _, enabled := range []bool{true, false} {
+		enabled := enabled
+		t.Run(fmt.Sprintf("enabled=%t", enabled), func(t *testing.T) {
+			t.Parallel()
+
+			sr := tracetest.NewSpanRecorder()
+			provider := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(sr))
+			otel.SetTracerProvider(provider)
+
+			app := fiber.New()
+			app.Use(otelfiber.Middleware(
+				otelfiber.WithTracerProvider(provider),
+				otelfiber.WithCollectClientIP(enabled),
+			))
+			app.Get("/foo", func(ctx *fiber.Ctx) error {
+				return ctx.SendStatus(http.StatusNoContent)
+			})
+
+			req := httptest.NewRequest("GET", "/foo", nil)
+			_, _ = app.Test(req)
+
+			spans := sr.Ended()
+			require.Len(t, spans, 1)
+
+			span := spans[0]
+			attrs := span.Attributes()
+			if enabled {
+				assert.Contains(t, attrs, attribute.String("http.client_ip", "0.0.0.0"))
+			} else {
+				assert.NotContains(t, attrs, attribute.String("http.client_ip", "0.0.0.0"))
+			}
+		})
+	}
 }
