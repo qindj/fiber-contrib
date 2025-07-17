@@ -6,7 +6,7 @@ toolchain go1.24.5
 
 require (
 	github.com/MicahParks/keyfunc/v2 v2.1.0
-	github.com/gofiber/fiber/v2 v2.52.8
+	github.com/gofiber/fiber/v3 v3.0.0-beta.4.0.20250715191623-93de9c59eb71
 	github.com/golang-jwt/jwt/v5 v5.2.2
 )
 
