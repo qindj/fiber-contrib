@@ -6,7 +6,7 @@ import (
 	"io"
 	"os"
 
-	fiberlog "github.com/gofiber/fiber/v2/log"
+	fiberlog "github.com/gofiber/fiber/v3/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -302,26 +302,32 @@ func (l *LoggerConfig) Log(level fiberlog.Level, kvs ...interface{}) {
 func (l *LoggerConfig) Logw(level fiberlog.Level, msg string, keyvals ...interface{}) {
 	keylen := len(keyvals)
 	if keylen == 0 || keylen%2 != 0 {
-		l.Logger().Warn(fmt.Sprint("Keyvalues must appear in pairs: ", keyvals))
+		if logger, ok := l.Logger().(*zap.Logger); ok {
+			logger.Warn(fmt.Sprint("Keyvalues must appear in pairs: ", keyvals))
+		}
 		return
 	}
 	data := make([]zap.Field, 0, (keylen/2)+1)
 	for i := 0; i < keylen; i += 2 {
 		data = append(data, zap.Any(fmt.Sprint(keyvals[i]), keyvals[i+1]))
 	}
+	logger, ok := l.Logger().(*zap.Logger)
+	if !ok {
+		return
+	}
 	switch level {
 	case fiberlog.LevelTrace, fiberlog.LevelDebug:
-		l.Logger().Debug(msg, data...)
+		logger.Debug(msg, data...)
 	case fiberlog.LevelInfo:
-		l.Logger().Info(msg, data...)
+		logger.Info(msg, data...)
 	case fiberlog.LevelWarn:
-		l.Logger().Warn(msg, data...)
+		logger.Warn(msg, data...)
 	case fiberlog.LevelError:
-		l.Logger().Error(msg, data...)
+		logger.Error(msg, data...)
 	case fiberlog.LevelFatal:
-		l.Logger().Fatal(msg, data...)
+		logger.Fatal(msg, data...)
 	default:
-		l.Logger().Warn(msg, data...)
+		logger.Warn(msg, data...)
 	}
 }
 
@@ -331,6 +337,6 @@ func (l *LoggerConfig) Sync() error {
 }
 
 // Logger returns the underlying *zap.Logger when not using SetLogger
-func (l *LoggerConfig) Logger() *zap.Logger {
+func (l *LoggerConfig) Logger() any {
 	return l.logger
 }
