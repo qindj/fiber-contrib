@@ -1,0 +1,24 @@
+name: After Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  # Websocket releases update socketio dep in same repo
+  self-update:
+    if: contains(github.event.release.tag_name, 'websocket')
+    uses: gofiber/.github/.github/workflows/after-release.yml@main
+    with:
+      repos: |
+        - gofiber/contrib
+    secrets:
+      dispatch-token: ${{ secrets.DISPATCH_TOKEN }}
+
+  notify-dependents:
+    uses: gofiber/.github/.github/workflows/after-release.yml@main
+    with:
+      repos: |
+        - gofiber/recipes
+    secrets:
+      dispatch-token: ${{ secrets.DISPATCH_TOKEN }}
